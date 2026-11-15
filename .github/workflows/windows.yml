@@ -1,0 +1,69 @@
+# Builds the Windows app on a GitHub Windows machine and makes the installer.
+# Runs on every push to main, or by hand: Actions tab -> "Windows build" -> Run workflow.
+# Result: the "Tally-Windows" download on the run's page, with
+#   Tally-Setup.exe   the installer (copy to the Windows PC and double-click)
+#   Tally-portable\   the same app as a plain folder (no install needed)
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.41.4
+          cache: true
+
+      - name: Get packages
+        run: flutter pub get
+
+      # Also checks the app's rules and screens on Windows. A failure here is
+      # reported as a warning but does not stop the build.
+      - name: Run the tests on Windows
+        id: tests
+        continue-on-error: true
+        timeout-minutes: 15
+        run: flutter test --timeout 180s
+
+      - name: Build the app
+        run: flutter build windows --release
+
+      # So Tally also runs on PCs without the Visual C++ Redistributable
+      - name: Add the Visual C++ runtime files next to Tally.exe
+        shell: pwsh
+        run: |
+          foreach ($f in 'msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll') {
+            Copy-Item "$env:WINDIR\System32\$f" build\windows\x64\runner\Release\
+          }
+
+      - name: Make the installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DAppVersion=$version" installer\tally.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Add the portable app folder
+        shell: pwsh
+        run: Copy-Item -Recurse build\windows\x64\runner\Release dist\Tally-portable
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Tally-Windows
+          path: dist/
+          if-no-files-found: error
+
+      - name: Report failed tests
+        if: steps.tests.outcome == 'failure'
+        run: echo "::warning::Some tests failed on Windows. See the step 'Run the tests on Windows'."
