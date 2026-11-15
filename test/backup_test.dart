@@ -19,6 +19,16 @@ class _FakePaths extends PathProviderPlatform with MockPlatformInterfaceMixin {
   _FakePaths(this.dir);
   @override
   Future<String?> getApplicationDocumentsPath() async => dir;
+  @override
+  Future<String?> getApplicationSupportPath() async => dir; // Windows: appDataDir
+}
+
+/// Removes the test's temp folder. On Windows the app's data file is still
+/// open at this point and cannot be deleted; the system cleans Temp later.
+Future<void> _deleteTemp(Directory tmp) async {
+  try {
+    await tmp.delete(recursive: true);
+  } on FileSystemException catch (_) {}
 }
 
 void main() {
@@ -36,7 +46,7 @@ void main() {
     // Stop automatic backups (cancels the pending one), let a running one finish
     await Get.delete<BackupService>(force: true);
     await Future.delayed(const Duration(seconds: 1));
-    await tmp.delete(recursive: true);
+    await _deleteTemp(tmp);
   });
 
   group('old backup folder ("Ghee Tally Backups") is moved to the new one', () {

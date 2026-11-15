@@ -37,6 +37,8 @@ class _FakePaths extends PathProviderPlatform with MockPlatformInterfaceMixin {
   _FakePaths(this.dir);
   @override
   Future<String?> getApplicationDocumentsPath() async => dir;
+  @override
+  Future<String?> getApplicationSupportPath() async => dir; // Windows: appDataDir
 }
 
 /// Backup service without timers or file access (not needed to draw screens).
@@ -173,7 +175,13 @@ void main() {
     await _loadFonts();
   });
 
-  tearDownAll(() => tmp.delete(recursive: true));
+  // On Windows the app's data file is still open here and cannot be deleted;
+  // the system cleans Temp later.
+  tearDownAll(() async {
+    try {
+      await tmp.delete(recursive: true);
+    } on FileSystemException catch (_) {}
+  });
 
   // 1100x720: the smallest window. 1084x680: the content area left inside a
   // 1100x720 window on Windows (title bar and borders) and on macOS (1100x692).

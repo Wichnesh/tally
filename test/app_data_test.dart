@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:ghee_tally/services/app_data.dart';
 
 /// Windows: data saved by earlier builds in Documents is copied once into
@@ -39,7 +40,7 @@ void main() {
 
     final data = read(app);
     expect((data['entries'] as List).length, 1);
-    final newPhoto = '${app.path}/proofs/123_id.png';
+    final newPhoto = p.join(app.path, 'proofs', '123_id.png'); // "\" on Windows
     expect(data['customers'][0]['proofs'], [newPhoto]);
     expect(File(newPhoto).readAsStringSync(), 'photo');
     expect(data['customers'][1]['proofs'], isEmpty);
